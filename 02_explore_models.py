@@ -28,7 +28,7 @@ N_TRIALS = int(dbutils.widgets.get("n_trials"))
 TRAINING_DEVICE = dbutils.widgets.get("training_device")
 CURRENT_USER = spark.sql("SELECT current_user()").first()[0]
 EXPERIMENT_NAME = dbutils.widgets.get("experiment_name").strip() or (
-    f"/Users/{CURRENT_USER}/{SCHEMA}/stuff-model-development"
+    f"/Users/{CURRENT_USER}/stuff-model-development"
 )
 
 SILVER_TABLE = f"{CATALOG}.{SCHEMA}.silver_pitches"
