@@ -208,6 +208,7 @@ with mlflow.start_run(run_name="genie-code-xgboost-stuff") as parent_run:
         input_example=input_example,
         signature=infer_signature(input_example, final_model.predict(input_example)),
         registered_model_name=MODEL_NAME,
+        serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_CLOUDPICKLE,
     )
 
     reloaded = mlflow.pyfunc.load_model(model_info.model_uri)

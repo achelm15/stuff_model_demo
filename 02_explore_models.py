@@ -428,6 +428,9 @@ for algorithm, params in [("lightgbm", LGBM_PARAMS), ("xgboost", XGB_PARAMS)]:
                 name="model",
                 input_example=input_example,
                 signature=signature,
+                # MLflow 3 defaults sklearn saving to skops, which rejects the LightGBM
+                # and ColumnTransformer types. cloudpickle handles any candidate algorithm.
+                serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_CLOUDPICKLE,
             )
             comparison_rows.append({
                 "run_id": run.info.run_id,
@@ -574,6 +577,7 @@ with mlflow.start_run(run_name="best-xgboost-engineered") as best_run:
         name="model",
         input_example=input_example,
         signature=signature,
+        serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_CLOUDPICKLE,
     )
 
 print("Suggested XGBoost parameters:", json.dumps(study.best_params, indent=2))

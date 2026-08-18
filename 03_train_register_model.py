@@ -212,6 +212,9 @@ with mlflow.start_run(run_name=f"canonical-{ENVIRONMENT}-xgboost") as parent_run
         input_example=input_example,
         signature=infer_signature(input_example, final_model.predict(input_example)),
         registered_model_name=MODEL_NAME,
+        # cloudpickle instead of MLflow 3's skops default so the registered model logs
+        # (and later loads, e.g. in the app) without skops trusted-type errors.
+        serialization_format=mlflow.sklearn.SERIALIZATION_FORMAT_CLOUDPICKLE,
     )
 
     reloaded = mlflow.pyfunc.load_model(model_info.model_uri)
