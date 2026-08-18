@@ -93,23 +93,31 @@ duplicate_key_exists = (
 )
 assert not duplicate_key_exists, "Prediction keys are not unique."
 
+import warnings
+
 import pandas as pd
 import mlflow.sklearn
 from pyspark.sql.functions import pandas_udf
 
+# A booster pickled by an older xgboost patch warns (harmlessly) when a newer xgboost
+# unpickles it; the prediction is unaffected. Retraining (notebook 03) on the current env
+# clears it at the source. Silence the one message so the batch driver logs stay readable.
+warnings.filterwarnings("ignore", message=".*serialized model.*", category=UserWarning)
+
 # mlflow.pyfunc.spark_udf parses the Databricks runtime version, which raises
 # InvalidVersion on preview runtimes with non-numeric minors (e.g. "18.x-photon-scala2").
-# Load the model once on the driver (load_model does not parse the runtime), broadcast it,
-# and apply it through a pandas UDF so scoring stays distributed.
+# Load the model on the driver (load_model does not parse the runtime) and apply it through a
+# pandas UDF so scoring stays distributed. The UDF closure captures _model, and Spark
+# cloudpickles it out to the workers; we deliberately do NOT use sparkContext.broadcast
+# because SparkContext is not accessible on serverless compute.
 _model = mlflow.sklearn.load_model(MODEL_URI)
-_model_broadcast = spark.sparkContext.broadcast(_model)
 
 
 @pandas_udf("double")
 def predict_udf(*feature_cols):
     frame = pd.concat(feature_cols, axis=1)
     frame.columns = MODEL_INPUTS
-    return pd.Series(_model_broadcast.value.predict(frame), index=frame.index)
+    return pd.Series(_model.predict(frame), index=frame.index)
 
 scored = (
     source.select(*IDENTITY_COLUMNS, *MODEL_INPUTS, "pitch_rv")
