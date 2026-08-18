@@ -12,3 +12,6 @@ venv/
 # Databricks / editor
 .databricks/
 .DS_Store
+
+# Large data files — distributed via GitHub Releases, not committed
+*.zip
