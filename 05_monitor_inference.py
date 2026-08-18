@@ -14,16 +14,16 @@
 
 # COMMAND ----------
 
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 # MAGIC %run ./_monitoring_helpers
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
 dbutils.widgets.text("warehouse_id", "")
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 WAREHOUSE_ID = dbutils.widgets.get("warehouse_id").strip()
 
 PREDICTION_EVENTS_TABLE = f"{CATALOG}.{SCHEMA}.gold_pitch_prediction_events"

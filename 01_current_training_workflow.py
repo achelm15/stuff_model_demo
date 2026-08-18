@@ -15,11 +15,11 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
+# COMMAND ----------
+
+
 SILVER_TABLE = f"{CATALOG}.{SCHEMA}.silver_pitches"
 
 # COMMAND ----------

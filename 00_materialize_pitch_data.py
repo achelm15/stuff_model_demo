@@ -17,15 +17,15 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 dbutils.widgets.text("seasons", "2024,2025")
 dbutils.widgets.text("team_id", "")  # blank = all MLB teams
 dbutils.widgets.text("max_games_per_season", "0")  # 0 = all scheduled games
 dbutils.widgets.dropdown("refresh_raw", "false", ["false", "true"])
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 SEASONS = [int(s.strip()) for s in dbutils.widgets.get("seasons").split(",") if s.strip()]
 TEAM_ID_RAW = dbutils.widgets.get("team_id").strip()
 TEAM_ID = int(TEAM_ID_RAW) if TEAM_ID_RAW else None

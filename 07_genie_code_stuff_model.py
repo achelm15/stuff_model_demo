@@ -17,7 +17,8 @@
 # MAGIC
 # MAGIC > `@rockies-mlflow-conventions` Train an XGBoost "stuff" regressor that predicts
 # MAGIC > `pitch_rv` for four-seam and sinker fastballs in
-# MAGIC > `ahelmreich_demo.rockies_mlflow_workshop.silver_pitches`. Use the engineered feature
+# MAGIC > `<catalog>.<schema>.silver_pitches` (the target you set on the `_config` widgets).
+# MAGIC > Use the engineered feature
 # MAGIC > set, tune with Optuna as nested MLflow runs, evaluate on an untouched holdout, log the
 # MAGIC > model with a signature and input example, and register a **candidate** version to Unity
 # MAGIC > Catalog without moving the `@champion` alias.
@@ -28,14 +29,14 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 dbutils.widgets.text("train_season", "2024")
 dbutils.widgets.text("n_trials", "8")
 dbutils.widgets.dropdown("training_device", "gpu", ["gpu", "cpu"])
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 TRAIN_SEASON = int(dbutils.widgets.get("train_season"))
 N_TRIALS = int(dbutils.widgets.get("n_trials"))
 TRAINING_DEVICE = dbutils.widgets.get("training_device")

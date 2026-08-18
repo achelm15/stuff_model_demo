@@ -13,8 +13,10 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 dbutils.widgets.dropdown("environment", "dev", ["dev", "staging", "prod"])
 dbutils.widgets.text("experiment_name", "")
 dbutils.widgets.text("train_season", "2024")
@@ -22,15 +24,13 @@ dbutils.widgets.text("model_alias", "champion")
 dbutils.widgets.dropdown("training_device", "gpu", ["gpu", "cpu"])
 dbutils.widgets.text("tuning_trials", "8")
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 ENVIRONMENT = dbutils.widgets.get("environment")
 TRAIN_SEASON = int(dbutils.widgets.get("train_season"))
 MODEL_ALIAS = dbutils.widgets.get("model_alias").strip()
 TRAINING_DEVICE = dbutils.widgets.get("training_device")
 TUNING_TRIALS = int(dbutils.widgets.get("tuning_trials"))
 EXPERIMENT_NAME = dbutils.widgets.get("experiment_name").strip() or (
-    f"/Shared/rockies_mlflow_workshop_{ENVIRONMENT}"
+    f"/Shared/{SCHEMA}_{ENVIRONMENT}"
 )
 
 SILVER_TABLE = f"{CATALOG}.{SCHEMA}.silver_pitches"

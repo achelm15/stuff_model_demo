@@ -13,14 +13,14 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 dbutils.widgets.text("model_alias", "champion")
 dbutils.widgets.text("inference_season", "2025")
 dbutils.widgets.text("batch_id", "")
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 MODEL_ALIAS = dbutils.widgets.get("model_alias").strip()
 INFERENCE_SEASON = int(dbutils.widgets.get("inference_season"))
 REQUESTED_BATCH_ID = dbutils.widgets.get("batch_id").strip()

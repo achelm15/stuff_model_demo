@@ -16,19 +16,19 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 dbutils.widgets.text("n_trials", "16")
 dbutils.widgets.text("experiment_name", "")
 dbutils.widgets.dropdown("training_device", "gpu", ["gpu", "cpu"])
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 N_TRIALS = int(dbutils.widgets.get("n_trials"))
 TRAINING_DEVICE = dbutils.widgets.get("training_device")
 CURRENT_USER = spark.sql("SELECT current_user()").first()[0]
 EXPERIMENT_NAME = dbutils.widgets.get("experiment_name").strip() or (
-    f"/Users/{CURRENT_USER}/rockies-mlflow-demo/stuff-model-development"
+    f"/Users/{CURRENT_USER}/{SCHEMA}/stuff-model-development"
 )
 
 SILVER_TABLE = f"{CATALOG}.{SCHEMA}.silver_pitches"

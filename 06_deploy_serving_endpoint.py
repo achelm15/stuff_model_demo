@@ -8,13 +8,13 @@
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog", "ahelmreich_demo")
-dbutils.widgets.text("schema", "rockies_mlflow_workshop")
+# MAGIC %run ./_config
+
+# COMMAND ----------
+
 dbutils.widgets.text("model_alias", "champion")
 dbutils.widgets.text("endpoint_name", "rockies-stuff-rv")
 
-CATALOG = dbutils.widgets.get("catalog")
-SCHEMA = dbutils.widgets.get("schema")
 MODEL_ALIAS = dbutils.widgets.get("model_alias").strip()
 ENDPOINT_NAME = dbutils.widgets.get("endpoint_name")
 MODEL_NAME = f"{CATALOG}.{SCHEMA}.fastball_stuff_rv"
