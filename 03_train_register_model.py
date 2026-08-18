@@ -21,7 +21,7 @@ dbutils.widgets.dropdown("environment", "dev", ["dev", "staging", "prod"])
 dbutils.widgets.text("experiment_name", "")
 dbutils.widgets.text("train_season", "2024")
 dbutils.widgets.text("model_alias", "champion")
-dbutils.widgets.dropdown("training_device", "gpu", ["gpu", "cpu"])
+dbutils.widgets.dropdown("training_device", "auto", ["auto", "gpu", "cpu"])
 dbutils.widgets.text("tuning_trials", "8")
 
 ENVIRONMENT = dbutils.widgets.get("environment")
@@ -82,9 +82,17 @@ MODEL_INPUTS = NUMERIC_FEATURES + CATEGORICAL_FEATURES
 
 assert spark.catalog.tableExists(SILVER_TABLE), f"{SILVER_TABLE} does not exist. Run notebook 00."
 assert TUNING_TRIALS > 0, "tuning_trials must be positive."
+# "auto" uses a GPU when one is present and falls back to CPU otherwise; "gpu" requires
+# one and errors if it is missing; "cpu" forces CPU.
 if TRAINING_DEVICE == "gpu":
-    assert shutil.which("nvidia-smi"), "Attach this notebook to NVIDIA GPU compute or select cpu."
-XGBOOST_DEVICE = "cuda" if TRAINING_DEVICE == "gpu" else "cpu"
+    assert shutil.which("nvidia-smi"), "training_device=gpu needs NVIDIA GPU compute; use auto or cpu."
+    XGBOOST_DEVICE = "cuda"
+elif TRAINING_DEVICE == "cpu":
+    XGBOOST_DEVICE = "cpu"
+else:
+    XGBOOST_DEVICE = "cuda" if shutil.which("nvidia-smi") else "cpu"
+    if XGBOOST_DEVICE == "cpu":
+        print("No NVIDIA GPU detected; training on CPU (training_device=auto).")
 
 # COMMAND ----------
 # MAGIC %md
