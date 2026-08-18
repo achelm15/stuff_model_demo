@@ -13,6 +13,7 @@ model predicts it from release speed, spin, movement, and release geometry.
 |------|--------------|
 | `_config.py` | Shared `catalog` / `schema` widgets. Every notebook `%run`s this so the target lives in one place. |
 | `00_materialize_pitch_data.py` | Pull MLB GUMBO feeds through a bronze/silver pipeline into the `silver_pitches` table. |
+| `00b_load_from_release_csv.py` | Fast alternative to `00`: download the published CSV from the Release, extract it to a Volume, and write `silver_pitches` directly. |
 | `01_current_training_workflow.py` | The anti-pattern: train, print a metric, tweak in place, lose track. No MLflow. Shown on purpose as the "before". |
 | `02_explore_models.py` | Development notebook. Tune candidates in a personal MLflow experiment. |
 | `03_train_register_model.py` | Production entrypoint. Tune, evaluate on a holdout, register to Unity Catalog, set the `@champion` alias. |
@@ -50,7 +51,7 @@ Steps:
 Run `00` first, then `02 -> 03 -> 04 -> 05 -> 06`. `01` is an illustration you can run
 any time to contrast with the MLflow workflow. `07` is an alternative to `02`/`03`.
 
-1. `00` materializes `silver_pitches` (or load the CSV below to skip the API pull).
+1. `00` materializes `silver_pitches` from the API, or run `00b` to load the published CSV instead (see Training data).
 2. `02` explores and tunes candidates in a personal experiment.
 3. `03` trains the reviewed model, registers it, and sets `@champion`.
 4. `04` scores the current season into the prediction-events table.
@@ -74,23 +75,13 @@ You have two ways to get data:
 
 - **Rebuild it**: run notebook `00`. This pulls from the MLB API into `silver_pitches`
   and needs no download. This is the canonical path.
-- **Download the CSV**: skip the API pull and load the Release asset into a UC Volume.
-  Put it in a Volume, not the Git folder. Run this in a notebook cell after setting
-  your catalog/schema:
+- **Load the CSV**: run notebook `00b`. It downloads the Release zip into a UC Volume,
+  extracts the CSV, and writes `silver_pitches` for you. Faster than the API pull, and
+  it keeps the file in a Volume, not the Git folder. The `release_url` and `volume` are
+  widgets if you need to change them.
 
-  ```python
-  import urllib.request, zipfile
-
-  CATALOG, SCHEMA, VOLUME = "your_catalog", "your_schema", "gumbo_raw"
-  spark.sql(f"CREATE VOLUME IF NOT EXISTS {CATALOG}.{SCHEMA}.{VOLUME}")
-  base = f"/Volumes/{CATALOG}/{SCHEMA}/{VOLUME}"
-  url = "https://github.com/achelm15/stuff_model_demo/releases/download/data-v1/Pitch_Stuff_Model_Training.csv.zip"
-
-  urllib.request.urlretrieve(url, f"{base}/pitches.zip")
-  with zipfile.ZipFile(f"{base}/pitches.zip") as z:
-      z.extractall(base)
-  # -> {base}/Pitch_Stuff_Model_Training.csv
-  ```
+The loaded table only covers the seasons in the export, so check `00b`'s season summary
+before you set the `train_season` / `inference_season` widgets in later notebooks.
 
 ## Gotchas
 
