@@ -22,7 +22,7 @@
 
 dbutils.widgets.text("n_trials", "16")
 dbutils.widgets.text("experiment_name", "")
-dbutils.widgets.dropdown("training_device", "gpu", ["gpu", "cpu"])
+dbutils.widgets.dropdown("training_device", "auto", ["auto", "gpu", "cpu"])
 
 N_TRIALS = int(dbutils.widgets.get("n_trials"))
 TRAINING_DEVICE = dbutils.widgets.get("training_device")
@@ -59,16 +59,11 @@ mlflow.set_experiment(EXPERIMENT_NAME)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
 
-def configure_training_devices(requested_device):
-    if requested_device == "cpu":
-        return "cpu", "cpu", None
-
+def _detect_nvidia_gpu():
+    """Return the GPU name if a working NVIDIA GPU is visible, else None."""
     nvidia_smi = shutil.which("nvidia-smi")
     if nvidia_smi is None:
-        raise RuntimeError(
-            "training_device=gpu requires NVIDIA GPU-backed Databricks compute. "
-            "Attach this notebook to GPU compute or set training_device=cpu."
-        )
+        return None
     probe = subprocess.run(
         [nvidia_smi, "--query-gpu=name", "--format=csv,noheader"],
         capture_output=True,
@@ -76,11 +71,27 @@ def configure_training_devices(requested_device):
         check=False,
     )
     if probe.returncode != 0 or not probe.stdout.strip():
-        raise RuntimeError(
-            "training_device=gpu requires NVIDIA GPU-backed Databricks compute. "
-            "Attach this notebook to GPU compute or set training_device=cpu."
-        )
-    gpu_name = probe.stdout.strip().splitlines()[0]
+        return None
+    return probe.stdout.strip().splitlines()[0]
+
+
+def configure_training_devices(requested_device):
+    # "auto" uses a GPU when one is present and falls back to CPU otherwise, so the
+    # notebook runs anywhere. "gpu" requires one and errors if it is missing; "cpu"
+    # forces CPU.
+    if requested_device == "cpu":
+        return "cpu", "cpu", None
+
+    gpu_name = _detect_nvidia_gpu()
+    if gpu_name is None:
+        if requested_device == "gpu":
+            raise RuntimeError(
+                "training_device=gpu requires NVIDIA GPU-backed Databricks compute. "
+                "Attach GPU compute, or set training_device=auto (falls back to CPU) or cpu."
+            )
+        print("No NVIDIA GPU detected; falling back to CPU (training_device=auto).")
+        return "cpu", "cpu", None
+
     # AI Runtime provides CUDA for prebuilt packages such as XGBoost, but does not expose
     # an OpenCL device or the nvcc compiler needed to build LightGBM's CUDA backend.
     return "cpu", "cuda", gpu_name
