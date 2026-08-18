@@ -59,6 +59,12 @@ mlflow.set_registry_uri("databricks-uc")
 mlflow.set_experiment(EXPERIMENT_NAME)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+# Serverless/shared compute blocks the py4j call MLflow uses to resolve some run-context
+# tags; silence that benign WARNING so it doesn't spam the output (runs still log fine).
+import logging
+
+logging.getLogger("mlflow.tracking.context.registry").setLevel(logging.ERROR)
+
 TARGET = "pitch_rv"
 NUMERIC_FEATURES = [
     "release_speed",

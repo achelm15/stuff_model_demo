@@ -58,6 +58,12 @@ from xgboost import XGBRegressor
 mlflow.set_experiment(EXPERIMENT_NAME)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+# Serverless/shared compute blocks the py4j call MLflow uses to resolve some run-context
+# tags; silence that benign WARNING so it doesn't spam the output (runs still log fine).
+import logging
+
+logging.getLogger("mlflow.tracking.context.registry").setLevel(logging.ERROR)
+
 
 def _detect_nvidia_gpu():
     """Return the GPU name if a working NVIDIA GPU is visible, else None."""
