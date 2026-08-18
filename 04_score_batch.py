@@ -66,8 +66,8 @@ IDENTITY_COLUMNS = [
 # MAGIC %md
 # MAGIC ## Score the registered artifact
 # MAGIC
-# MAGIC The registered pyfunc is applied as a Spark UDF, so feature rows remain distributed and
-# MAGIC are never collected to the driver. In routine production inference, the source would be
+# MAGIC The registered model is loaded once and applied through a pandas UDF, so feature rows
+# MAGIC remain distributed and are never collected to the driver. In routine production inference, the source would be
 # MAGIC restricted to the new batch; a promotion workflow can deliberately select the full scoring
 # MAGIC population.
 
@@ -93,12 +93,23 @@ duplicate_key_exists = (
 )
 assert not duplicate_key_exists, "Prediction keys are not unique."
 
-predict_udf = mlflow.pyfunc.spark_udf(
-    spark,
-    model_uri=MODEL_URI,
-    result_type="double",
-    env_manager="local",
-)
+import pandas as pd
+import mlflow.sklearn
+from pyspark.sql.functions import pandas_udf
+
+# mlflow.pyfunc.spark_udf parses the Databricks runtime version, which raises
+# InvalidVersion on preview runtimes with non-numeric minors (e.g. "18.x-photon-scala2").
+# Load the model once on the driver (load_model does not parse the runtime), broadcast it,
+# and apply it through a pandas UDF so scoring stays distributed.
+_model = mlflow.sklearn.load_model(MODEL_URI)
+_model_broadcast = spark.sparkContext.broadcast(_model)
+
+
+@pandas_udf("double")
+def predict_udf(*feature_cols):
+    frame = pd.concat(feature_cols, axis=1)
+    frame.columns = MODEL_INPUTS
+    return pd.Series(_model_broadcast.value.predict(frame), index=frame.index)
 
 scored = (
     source.select(*IDENTITY_COLUMNS, *MODEL_INPUTS, "pitch_rv")
