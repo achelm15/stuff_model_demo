@@ -1,0 +1,10 @@
+environment_version: "5"
+dependencies:
+  - mlflow==3.15.1
+  - databricks-sdk==0.128.0
+  - lightgbm==4.6.0
+  - xgboost==3.0.4
+  - optuna==4.5.0
+  - scikit-learn==1.6.1
+  - scipy
+  - shap==0.48.0

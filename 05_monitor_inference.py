@@ -1,7 +1,7 @@
 # Databricks notebook source
 # /// script
 # [tool.databricks.environment]
-# base_environment = "/Workspace/Users/andrew.helmreich@databricks.com/rockies-mlflow-demo/rockies-mlflow-demo.yaml"
+# base_environment = "environment.yaml"
 # environment_version = "5"
 # ///
 # MAGIC %md
