@@ -17,8 +17,8 @@ model predicts it from release speed, spin, movement, and release geometry.
 | `01_current_training_workflow.py` | The anti-pattern: train, print a metric, tweak in place, lose track. No MLflow. Shown on purpose as the "before". |
 | `02_explore_models.py` | Development notebook. Tune candidates in a personal MLflow experiment. |
 | `03_train_register_model.py` | Production entrypoint. Tune, evaluate on a holdout, register to Unity Catalog, set the `@champion` alias. |
-| `04_score_batch.py` | Batch inference. Score with the registered model and write one prediction-events table. |
-| `05_monitor_inference.py` | Managed Data Quality / inference monitoring on the prediction-events table. |
+| `04_score_batch.py` | Batch inference. Score with the registered model and write one predictions table. |
+| `05_monitor_inference.py` | Managed Data Quality / inference monitoring on the predictions table. |
 | `06_deploy_serving_endpoint.py` | Create or update a Model Serving endpoint for the champion model. |
 | `07_genie_code_stuff_model.py` | Alternative bootstrap: the same model scaffolded by Databricks Genie Code. |
 | `_monitoring_helpers.py` | Helpers `%run` by notebook 05. |
@@ -54,7 +54,7 @@ any time to contrast with the MLflow workflow. `07` is an alternative to `02`/`0
 1. `00` materializes `silver_pitches` from the API, or run `00b` to load the published CSV instead (see Training data).
 2. `02` explores and tunes candidates in a personal experiment.
 3. `03` trains the reviewed model, registers it, and sets `@champion`.
-4. `04` scores the current season into the prediction-events table.
+4. `04` scores the current season into the predictions table.
 5. `05` attaches monitoring. Set the `warehouse_id` widget here.
 6. `06` deploys the champion to a serving endpoint.
 

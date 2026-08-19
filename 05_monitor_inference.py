@@ -31,15 +31,15 @@ dbutils.widgets.text("warehouse_id", "")
 
 WAREHOUSE_ID = dbutils.widgets.get("warehouse_id").strip()
 
-PREDICTION_EVENTS_TABLE = f"{CATALOG}.{SCHEMA}.gold_pitch_prediction_events"
+PREDICTIONS_TABLE = f"{CATALOG}.{SCHEMA}.gold_pitch_predictions"
 ASSETS_DIR = (
     "/Workspace/Shared/rockies_mlflow_monitoring/"
-    + PREDICTION_EVENTS_TABLE.replace(".", "_")
+    + PREDICTIONS_TABLE.replace(".", "_")
 )
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Describe the prediction-events table to Databricks
+# MAGIC ## Describe the predictions table to Databricks
 # MAGIC
 # MAGIC The config below is the whole handoff: it tells Databricks that this table is an
 # MAGIC inference log and which columns mean what. Because we point it at the ground-truth
@@ -59,13 +59,13 @@ from databricks.sdk.service.dataquality import (
 )
 from pyspark.sql import functions as F
 
-assert spark.catalog.tableExists(PREDICTION_EVENTS_TABLE), "Run notebook 04 first."
+assert spark.catalog.tableExists(PREDICTIONS_TABLE), "Run notebook 04 first."
 
 # WorkspaceClient is the Databricks SDK entry point. The monitor is configured with the
 # numeric IDs of the schema (where its output tables go) and of the table being monitored.
 workspace = WorkspaceClient()
 schema_info = workspace.schemas.get(full_name=f"{CATALOG}.{SCHEMA}")
-table_info = workspace.tables.get(full_name=PREDICTION_EVENTS_TABLE)
+table_info = workspace.tables.get(full_name=PREDICTIONS_TABLE)
 
 config = DataProfilingConfig(
     output_schema_id=schema_info.schema_id,  # where Databricks creates the metrics tables
@@ -152,7 +152,7 @@ else:
 dbutils.notebook.exit(
     json.dumps(
         {
-            "prediction_events_table": PREDICTION_EVENTS_TABLE,
+            "predictions_table": PREDICTIONS_TABLE,
             "profile_metrics_table": profile_table,
             "drift_metrics_table": drift_table,
             "dashboard_id": monitor_config.dashboard_id,

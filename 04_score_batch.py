@@ -7,11 +7,10 @@
 # MAGIC %md
 # MAGIC # 04 · Batch Inference
 # MAGIC
-# MAGIC Score a season of pitches with the registered model and save the predictions to one
-# MAGIC table in Unity Catalog. That table is an append-only history of every prediction the
-# MAGIC model has made: it is both the audit log and the input that monitoring (notebook 05)
-# MAGIC reads. On top of it we create a SQL view (a saved query that stores no data of its own)
-# MAGIC that returns just the latest prediction for each pitch.
+# MAGIC Score a season of pitches with the `@champion` model and write the predictions to one
+# MAGIC Delta table in Unity Catalog. That table is what monitoring (notebook 05) reads and what
+# MAGIC dashboards query. Re-running the notebook overwrites the table, so it always holds the
+# MAGIC latest scoring.
 
 # COMMAND ----------
 
@@ -21,16 +20,13 @@
 
 dbutils.widgets.text("model_alias", "champion")
 dbutils.widgets.text("inference_season", "2025")
-dbutils.widgets.text("batch_id", "")
 
 MODEL_ALIAS = dbutils.widgets.get("model_alias").strip()
 INFERENCE_SEASON = int(dbutils.widgets.get("inference_season"))
-REQUESTED_BATCH_ID = dbutils.widgets.get("batch_id").strip()
 
 SILVER_TABLE = f"{CATALOG}.{SCHEMA}.silver_pitches"
 MODEL_NAME = f"{CATALOG}.{SCHEMA}.fastball_stuff_rv"
-PREDICTION_EVENTS_TABLE = f"{CATALOG}.{SCHEMA}.gold_pitch_prediction_events"
-CURRENT_PREDICTIONS_VIEW = f"{CATALOG}.{SCHEMA}.gold_current_pitch_predictions"
+PREDICTIONS_TABLE = f"{CATALOG}.{SCHEMA}.gold_pitch_predictions"
 
 # COMMAND ----------
 
@@ -45,10 +41,6 @@ registry = MlflowClient(registry_uri="databricks-uc")
 registered_version = registry.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS)
 MODEL_VERSION = str(registered_version.version)
 MODEL_URI = f"models:/{MODEL_NAME}@{MODEL_ALIAS}"
-
-# A Lakeflow Job should pass {{job.run_id}} as batch_id. The stable fallback keeps an
-# interactive workshop rerun idempotent for the same season and registered model version.
-BATCH_ID = REQUESTED_BATCH_ID or f"workshop-{INFERENCE_SEASON}-model-{MODEL_VERSION}"
 
 model_info = mlflow.models.get_model_info(MODEL_URI)
 MODEL_INPUTS = model_info.signature.inputs.input_names()
@@ -85,15 +77,6 @@ assert not missing_inputs, f"Source data is missing model inputs: {missing_input
 
 ROWS_TO_SCORE = source.count()
 assert ROWS_TO_SCORE > 0, "No rows matched the requested inference season."
-duplicate_key_exists = (
-    source.groupBy(*PREDICTION_KEYS)
-    .count()
-    .where(F.col("count") > 1)
-    .limit(1)
-    .count()
-    > 0
-)
-assert not duplicate_key_exists, "Prediction keys are not unique."
 
 import pandas as pd
 import mlflow.sklearn
@@ -125,12 +108,9 @@ def predict_udf(*feature_cols):
     frame.columns = MODEL_INPUTS
     return pd.Series(model.predict(frame), index=frame.index)
 
-# Build the exact row we store for each scored pitch:
-#   - predicted_run_value: the model's output.
-#   - actual_run_value: the observed outcome, kept so notebook 05 can measure quality later.
-#   - model_name/version/alias, batch_id, scored_at: provenance, so every prediction says
-#     which model produced it, in which run, and when.
-#   - inference_id: a deterministic fingerprint used to avoid duplicate rows on write (below).
+# Build the row we store for each scored pitch: the prediction, the observed outcome (kept
+# so notebook 05 can measure quality against it), and provenance columns saying which model
+# produced it and when.
 scored = (
     source.select(*IDENTITY_COLUMNS, *MODEL_INPUTS, "pitch_rv")
     .withColumn(
@@ -142,100 +122,43 @@ scored = (
     .withColumn("model_name", F.lit(MODEL_NAME))
     .withColumn("model_version", F.lit(MODEL_VERSION))
     .withColumn("model_alias", F.lit(MODEL_ALIAS))
-    .withColumn("batch_id", F.lit(BATCH_ID))
     .withColumn("scored_at", F.current_timestamp())
-    .withColumn(
-        # sha2 hashes (pitch keys + model version + batch id) into one id. The same pitch
-        # scored by the same model version in the same batch always gets the same id, so a
-        # re-run inserts nothing new. A new model version or batch changes the id, so a
-        # genuinely new prediction is still recorded.
-        "inference_id",
-        F.sha2(
-            F.concat_ws(
-                "||",
-                *[F.col(key).cast("string") for key in PREDICTION_KEYS],
-                F.lit(MODEL_VERSION),
-                F.lit(BATCH_ID),
-            ),
-            256,
-        ),
-    )
 )
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Write the predictions to the events table
+# MAGIC ## Write the predictions
 # MAGIC
-# MAGIC Each scored pitch becomes one row in `gold_pitch_prediction_events`, an append-only
-# MAGIC Delta table (a versioned table in Unity Catalog). We only ever add rows, never update
-# MAGIC or delete, so the table keeps the full history of every prediction the model has made.
-# MAGIC
-# MAGIC Two Databricks features make this safe to run more than once:
-# MAGIC
-# MAGIC - **`MERGE ... WHEN NOT MATCHED`** inserts a scored row only if its `inference_id` is
-# MAGIC   not already in the table, so re-running the batch (or an automatic job retry) never
-# MAGIC   creates duplicate rows.
-# MAGIC - **Change Data Feed** makes Delta record each row-level insert, so notebook 05 can
-# MAGIC   process only the new rows on each refresh instead of re-reading the whole table.
+# MAGIC Save the scored rows to one Delta table, overwriting it each run so it always holds the
+# MAGIC latest scoring. Change Data Feed is enabled because notebook 05's monitor uses it to read
+# MAGIC new rows incrementally.
 
 # COMMAND ----------
 
-# First run: the table does not exist yet, so create it by writing the scored rows.
-# Later runs: the table exists, so MERGE in only the rows whose inference_id is new.
-if spark.catalog.tableExists(PREDICTION_EVENTS_TABLE):
-    # Turn on Change Data Feed so notebook 05's monitor reads only new rows on each refresh.
-    spark.sql(
-        f"ALTER TABLE {PREDICTION_EVENTS_TABLE} "
-        "SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
-    )
-    # MERGE reads its new rows from SQL, so expose the scored DataFrame as a temporary view.
-    scored.createOrReplaceTempView("scored_batch")
-    # Insert a scored pitch only when its inference_id is not already present (no duplicates).
-    spark.sql(
-        f"""
-        MERGE INTO {PREDICTION_EVENTS_TABLE} AS target
-        USING scored_batch AS source
-        ON target.inference_id = source.inference_id
-        WHEN NOT MATCHED THEN INSERT *
-        """
-    )
-    spark.catalog.dropTempView("scored_batch")
-else:
-    # Create the table from the first batch, then enable Change Data Feed for future refreshes.
-    scored.write.format("delta").mode("append").saveAsTable(PREDICTION_EVENTS_TABLE)
-    spark.sql(
-        f"ALTER TABLE {PREDICTION_EVENTS_TABLE} "
-        "SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
-    )
-
-# The log can hold several predictions for the same pitch (for example after a newer model
-# version re-scores it). This view is a saved query that stores no data; it returns just the
-# most recent prediction per pitch (highest scored_at), which is what dashboards should read.
+(
+    scored.write.format("delta")
+    .mode("overwrite")
+    .option("overwriteSchema", "true")
+    .saveAsTable(PREDICTIONS_TABLE)
+)
 spark.sql(
-    f"""
-    CREATE OR REPLACE VIEW {CURRENT_PREDICTIONS_VIEW} AS
-    SELECT *
-    FROM {PREDICTION_EVENTS_TABLE}
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY game_pk, at_bat_index, pitch_number
-        ORDER BY scored_at DESC, inference_id DESC
-    ) = 1
-    """
+    f"ALTER TABLE {PREDICTIONS_TABLE} "
+    "SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
 )
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Read the latest prediction per pitch
+# MAGIC ## Inspect the predictions
 # MAGIC
-# MAGIC Querying the view gives one row per pitch with no data copied. As a quick sanity check
-# MAGIC we build a leaderboard of the pitchers whose fastballs have the lowest predicted run
-# MAGIC value (the best "stuff"), among those with enough fastballs to be meaningful.
+# MAGIC As a quick sanity check, build a leaderboard of the pitchers whose fastballs have the
+# MAGIC lowest predicted run value (the best "stuff"), among those with enough fastballs to be
+# MAGIC meaningful.
 
 # COMMAND ----------
 
-current_predictions = spark.table(CURRENT_PREDICTIONS_VIEW)
+predictions = spark.table(PREDICTIONS_TABLE)
 leaderboard = (
-    current_predictions.where(F.col("season") == INFERENCE_SEASON)
+    predictions.where(F.col("season") == INFERENCE_SEASON)
     .groupBy("season", "pitcher_id", "pitcher_name")
     .agg(
         F.count("*").alias("fastballs"),
@@ -251,10 +174,8 @@ dbutils.notebook.exit(
         {
             "model_version": MODEL_VERSION,
             "model_alias": MODEL_ALIAS,
-            "batch_id": BATCH_ID,
             "rows_scored": ROWS_TO_SCORE,
-            "prediction_events_table": PREDICTION_EVENTS_TABLE,
-            "current_predictions_view": CURRENT_PREDICTIONS_VIEW,
+            "predictions_table": PREDICTIONS_TABLE,
         }
     )
 )
