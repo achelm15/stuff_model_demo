@@ -23,7 +23,7 @@ model predicts it from release speed, spin, movement, and release geometry.
 | `07_genie_code_stuff_model.py` | Alternative bootstrap: the same model scaffolded by Databricks Genie Code. |
 | `_monitoring_helpers.py` | Helpers `%run` by notebook 05. |
 | `environment.yaml` | Pinned dependencies (mlflow, xgboost, optuna, scikit-learn, shap, lightgbm) used by the serverless environment header. |
-| `xgboost-tuning/` | A reusable Claude Code skill for XGBoost tuning + MLflow + SHAP. |
+| `rockies-mlflow-conventions/` | The workspace skill notebook `07` `@`-mentions: the house MLflow + Unity Catalog conventions for training the stuff model. |
 
 ## Prerequisites
 
