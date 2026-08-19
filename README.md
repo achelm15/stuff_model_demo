@@ -20,7 +20,7 @@ model predicts it from release speed, spin, movement, and release geometry.
 | `04_score_batch.py` | Batch inference. Score with the registered model and write one predictions table. |
 | `05_monitor_inference.py` | Managed Data Quality / inference monitoring on the predictions table. |
 | `06_deploy_serving_endpoint.py` | Create or update a Model Serving endpoint for the champion model. |
-| `07_genie_code_stuff_model.py` | Alternative bootstrap: the same model scaffolded by Databricks Genie Code. |
+| `07_genie_code_stuff_model.md` | A live Genie Code demo (instructions, not a runnable notebook): scaffold the same model from one prompt using the workspace skill. |
 | `_monitoring_helpers.py` | Helpers `%run` by notebook 05. |
 | `environment.yaml` | Pinned dependencies (mlflow, xgboost, optuna, scikit-learn, shap, lightgbm) used by the serverless environment header. |
 | `rockies-mlflow-conventions/` | The workspace skill notebook `07` `@`-mentions: the house MLflow + Unity Catalog conventions for training the stuff model. |
@@ -49,7 +49,8 @@ Steps:
 ## Run order
 
 Run `00` first, then `02 -> 03 -> 04 -> 05 -> 06`. `01` is an illustration you can run
-any time to contrast with the MLflow workflow. `07` is an alternative to `02`/`03`.
+any time to contrast with the MLflow workflow. `07` is a Genie Code demo you read and follow,
+not a notebook you run, showing the same `02`/`03` work scaffolded from one prompt.
 
 1. `00` materializes `silver_pitches` from the API, or run `00b` to load the published CSV instead (see Training data).
 2. `02` explores and tunes candidates in a personal experiment.
