@@ -9,7 +9,7 @@
 # MAGIC
 # MAGIC Create or reuse a managed Data Quality Inference profile on the prediction-events
 # MAGIC table written by notebook 04. Databricks computes model quality, feature profiles,
-# MAGIC prediction profiles, and consecutive-window drift—with no copied monitor-input table
+# MAGIC prediction profiles, and consecutive-window drift, with no copied monitor-input table
 # MAGIC and no custom baseline pipeline.
 
 # COMMAND ----------

@@ -10,7 +10,7 @@
 # MAGIC This notebook was scaffolded by **Databricks Genie Code** (the in-workspace agent-mode
 # MAGIC coding assistant) from a single natural-language prompt, using a shared **workspace skill**
 # MAGIC that encodes our MLflow + Unity Catalog conventions. The point of this notebook is not the
-# MAGIC model — notebook 03 remains the governed, service-principal training entry point — it is
+# MAGIC model (notebook 03 remains the governed, service-principal training entry point); it is
 # MAGIC how fast an agent gets you to a *correct first draft* that already follows house style.
 # MAGIC
 # MAGIC **The prompt given to Genie Code (@-mentioning the workspace skill):**
@@ -107,7 +107,7 @@ else:
 # MAGIC ## Load the governed fastball rows and reserve a holdout
 # MAGIC
 # MAGIC The skill told the agent to read from `silver_pitches`, filter to fastballs, and hold out
-# MAGIC 20% that is never used for fitting — the same honest-evaluation pattern as notebook 03.
+# MAGIC 20% that is never used for fitting, the same honest-evaluation pattern as notebook 03.
 
 # COMMAND ----------
 
@@ -156,8 +156,8 @@ def regression_metrics(actual, prediction, prefix):
 # MAGIC %md
 # MAGIC ## Tune with Optuna as nested MLflow runs, then register a candidate
 # MAGIC
-# MAGIC Genie Code produced the whole tracking scaffold — nested runs, signature, input example,
-# MAGIC feature contract — because the workspace skill described exactly how this team logs models.
+# MAGIC Genie Code produced the whole tracking scaffold (nested runs, signature, input example,
+# MAGIC feature contract) because the workspace skill described exactly how this team logs models.
 # MAGIC It deliberately does **not** touch the `@champion` alias: this is a prototype, not a
 # MAGIC promotion.
 

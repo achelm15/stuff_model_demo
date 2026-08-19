@@ -16,7 +16,7 @@ dbutils.widgets.text("model_alias", "champion")
 dbutils.widgets.text("endpoint_name", "rockies-stuff-rv")
 
 MODEL_ALIAS = dbutils.widgets.get("model_alias").strip()
-ENDPOINT_NAME = dbutils.widgets.get("endpoint_name")
+ENDPOINT_NAME = dbutils.widgets.get("endpoint_name").strip()
 MODEL_NAME = f"{CATALOG}.{SCHEMA}.fastball_stuff_rv"
 
 # COMMAND ----------

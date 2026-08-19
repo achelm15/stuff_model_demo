@@ -179,4 +179,4 @@ print("Last RMSE still in memory:", round(rmse, 6))
 # MAGIC - Can a scheduled job reproduce it under a service principal?
 # MAGIC
 # MAGIC Notebook 02 repeats this development loop with MLflow. The algorithms are not the
-# MAGIC lesson—the system of record is.
+# MAGIC lesson; the system of record is.

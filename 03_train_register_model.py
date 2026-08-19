@@ -183,7 +183,7 @@ with mlflow.start_run(run_name=f"canonical-{ENVIRONMENT}-xgboost") as parent_run
 
     def objective(trial):
         params = suggest_params(trial)
-        with mlflow.start_run(nested=True):
+        with mlflow.start_run(nested=True, run_name=f"trial-{trial.number:03d}"):
             candidate = make_model(params)
             candidate.fit(train_core[MODEL_INPUTS], train_core[TARGET])
             prediction = candidate.predict(tuning_validation_pdf[MODEL_INPUTS])

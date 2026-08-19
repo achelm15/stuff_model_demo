@@ -493,7 +493,11 @@ with mlflow.start_run(run_name="optuna-xgboost-engineered") as tuning_run:
         "compute_accelerator": TRAINING_DEVICE,
         "gpu_name": GPU_NAME or "none",
     })
-    study = optuna.create_study(direction="minimize")
+    study = optuna.create_study(
+        direction="minimize",
+        # Seed the sampler so a rerun reproduces the same trials, matching notebook 03.
+        sampler=optuna.samplers.TPESampler(seed=42),
+    )
     study.optimize(objective, n_trials=N_TRIALS)
     mlflow.log_metric("best_validation_rmse", float(study.best_value))
     mlflow.log_params({f"best_{key}": value for key, value in study.best_params.items()})
