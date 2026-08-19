@@ -20,10 +20,10 @@ model predicts it from release speed, spin, movement, and release geometry.
 | `04_score_batch.py` | Batch inference. Score with the registered model and write one predictions table. |
 | `05_monitor_inference.py` | Managed Data Quality / inference monitoring on the predictions table. |
 | `06_deploy_serving_endpoint.py` | Create or update a Model Serving endpoint for the champion model. |
-| `07_genie_code_stuff_model.py` | A near-empty notebook: one markdown cell with the prompt, which Genie Code fills in to scaffold the same model using the workspace skill. |
+| `07_genie_code_stuff_model.py` | A near-empty notebook: one markdown cell with the prompt, which Genie Code fills in to scaffold the same model using the personal skill. |
 | `_monitoring_helpers.py` | Helpers `%run` by notebook 05. |
 | `environment.yaml` | Pinned dependencies (mlflow, xgboost, optuna, scikit-learn, shap, lightgbm) used by the serverless environment header. |
-| `rockies-mlflow-conventions/` | The workspace skill notebook `07` `@`-mentions: the house MLflow + Unity Catalog conventions for training the stuff model. |
+| `rockies-mlflow-conventions/` | The personal Assistant skill notebook `07` `@`-mentions: the house MLflow + Unity Catalog conventions for training the stuff model. Copy it into `/Workspace/Users/<you>/.assistant/skills/`. |
 
 ## Prerequisites
 

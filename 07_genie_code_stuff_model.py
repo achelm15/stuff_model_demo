@@ -10,14 +10,17 @@
 # MAGIC This notebook starts empty on purpose. You fill it in live with **Databricks Genie Code**
 # MAGIC (the in-workspace agent-mode coding assistant) from a single prompt, to show that an agent
 # MAGIC can scaffold the same governed training workflow as notebooks 02 and 03 because the prompt
-# MAGIC `@`-mentions a shared **workspace skill** that encodes our MLflow + Unity Catalog conventions.
+# MAGIC `@`-mentions a **personal skill** that encodes our MLflow + Unity Catalog conventions.
 # MAGIC
 # MAGIC The point is not the model. Notebook 03 remains the governed, service-principal training
 # MAGIC entry point. The point is how fast an agent gets you to a correct first draft that already
-# MAGIC follows house style, so every teammate's agent produces the same shape of code.
+# MAGIC follows house style, so your agent produces the same shape of code every time.
 # MAGIC
-# MAGIC The skill lives at `Workspace/.assistant/skills/rockies-mlflow-conventions/SKILL.md` (the
-# MAGIC `rockies-mlflow-conventions/` folder in this repo) and is available to everyone in the workspace.
+# MAGIC The skill lives in your own user folder at
+# MAGIC `/Workspace/Users/<your-username>/.assistant/skills/rockies-mlflow-conventions/SKILL.md` (the
+# MAGIC `rockies-mlflow-conventions/` folder in this repo). It is scoped to you; a workspace admin can
+# MAGIC later promote it to the shared `/Workspace/.assistant/skills/` path to give the whole team the
+# MAGIC same conventions.
 # MAGIC
 # MAGIC ## Try it
 # MAGIC
