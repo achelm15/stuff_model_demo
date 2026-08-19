@@ -7,10 +7,15 @@
 # MAGIC %md
 # MAGIC # 05 · Monitor Production Inference
 # MAGIC
-# MAGIC Create or reuse a managed Data Quality Inference profile on the prediction-events
-# MAGIC table written by notebook 04. Databricks computes model quality, feature profiles,
-# MAGIC prediction profiles, and consecutive-window drift, with no copied monitor-input table
-# MAGIC and no custom baseline pipeline.
+# MAGIC Databricks can watch a table of predictions and compute quality and drift metrics over
+# MAGIC time on its own. This notebook points that managed monitoring (a "Data Quality"
+# MAGIC profile) at the prediction-events table from notebook 04. You write no metric code and
+# MAGIC copy no data: Databricks profiles the predictions and the inputs, compares each day's
+# MAGIC window against the day before, and writes the results to two metrics tables plus a
+# MAGIC generated dashboard.
+# MAGIC
+# MAGIC The steps are: describe the table to Databricks (the config), create the monitor and
+# MAGIC run the first computation, then read the metrics tables it produced.
 
 # COMMAND ----------
 
@@ -34,11 +39,12 @@ ASSETS_DIR = (
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Define the monitoring contract
+# MAGIC ## Describe the prediction-events table to Databricks
 # MAGIC
-# MAGIC This is the complete handoff to Databricks: the prediction, optional ground-truth
-# MAGIC label, inference timestamp, immutable model version, and daily aggregation window.
-# MAGIC `pitch_type` is the one useful business slice.
+# MAGIC The config below is the whole handoff: it tells Databricks that this table is an
+# MAGIC inference log and which columns mean what. Because we point it at the ground-truth
+# MAGIC label as well as the prediction, it can compute regression-quality metrics (not just
+# MAGIC data profiles), broken down per day and per model version.
 
 # COMMAND ----------
 
@@ -55,42 +61,54 @@ from pyspark.sql import functions as F
 
 assert spark.catalog.tableExists(PREDICTION_EVENTS_TABLE), "Run notebook 04 first."
 
+# WorkspaceClient is the Databricks SDK entry point. The monitor is configured with the
+# numeric IDs of the schema (where its output tables go) and of the table being monitored.
 workspace = WorkspaceClient()
 schema_info = workspace.schemas.get(full_name=f"{CATALOG}.{SCHEMA}")
 table_info = workspace.tables.get(full_name=PREDICTION_EVENTS_TABLE)
 
 config = DataProfilingConfig(
-    output_schema_id=schema_info.schema_id,
-    assets_dir=ASSETS_DIR,
-    slicing_exprs=["pitch_type"],
+    output_schema_id=schema_info.schema_id,  # where Databricks creates the metrics tables
+    assets_dir=ASSETS_DIR,                   # workspace folder for the generated dashboard
+    slicing_exprs=["pitch_type"],            # also compute every metric per pitch type (FF, SI)
     inference_log=InferenceLogConfig(
         problem_type=InferenceProblemType.INFERENCE_PROBLEM_TYPE_REGRESSION,
         prediction_column="predicted_run_value",
-        label_column="actual_run_value",
-        timestamp_column="scored_at",
-        model_id_column="model_version",
-        granularities=[AggregationGranularity.AGGREGATION_GRANULARITY_1_DAY],
+        label_column="actual_run_value",  # having the actual outcome enables quality metrics
+        timestamp_column="scored_at",      # the column that defines the daily time windows
+        model_id_column="model_version",   # metrics are tracked separately per model version
+        granularities=[AggregationGranularity.AGGREGATION_GRANULARITY_1_DAY],  # one window per day
     ),
 )
+# Optional: run the metric queries on a specific SQL warehouse instead of the default.
 if WAREHOUSE_ID:
     config.warehouse_id = WAREHOUSE_ID
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Refresh the managed profile
+# MAGIC ## Create the monitor and compute the first metrics
 # MAGIC
-# MAGIC On creation, Databricks reads inference events from the preceding 30 days. After that,
-# MAGIC Change Data Feed lets refreshes process new events incrementally. In a production Job,
-# MAGIC this task runs after inference; profile failures fail the task rather than being hidden.
+# MAGIC Both calls below are small wrappers defined in `_monitoring_helpers`:
+# MAGIC
+# MAGIC - `ensure_monitor` creates the managed monitor on the table the first time, and reuses
+# MAGIC   the existing one on later runs.
+# MAGIC - `refresh_and_wait` triggers one metric computation and blocks until it finishes, so a
+# MAGIC   failure fails this notebook instead of passing silently.
+# MAGIC
+# MAGIC On the first refresh Databricks reads the preceding 30 days of events to establish a
+# MAGIC baseline; after that, Change Data Feed lets each refresh process only the new rows.
+# MAGIC When it finishes, the monitor exposes the names of the two tables it created (profile
+# MAGIC metrics and drift metrics) and the ID of its generated dashboard.
 
 # COMMAND ----------
 
 monitor = ensure_monitor(workspace, table_info.table_id, config)
 refresh = refresh_and_wait(workspace, table_info.table_id)
 
+# The monitor tells us where it wrote its results.
 monitor_config = monitor.data_profiling_config
-profile_table = monitor_config.profile_metrics_table_name
-drift_table = monitor_config.drift_metrics_table_name
+profile_table = monitor_config.profile_metrics_table_name  # per-window column/quality metrics
+drift_table = monitor_config.drift_metrics_table_name      # window-over-window change metrics
 
 print("refresh:", refresh.refresh_id, refresh.state)
 print("profile metrics:", profile_table)
@@ -99,21 +117,29 @@ print("dashboard:", monitor_config.dashboard_id)
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Inspect Databricks-managed outputs
+# MAGIC ## Read the metrics tables Databricks produced
 # MAGIC
-# MAGIC The first batch produces profile and regression-quality metrics. Consecutive drift
-# MAGIC appears only after a second daily window exists. That is the real production behavior:
-# MAGIC the initial 30-day scan is a lookback boundary, not an invented baseline.
+# MAGIC The first refresh produces profile and regression-quality metrics. Drift compares one
+# MAGIC daily window to the previous one, so it only appears once a second day of predictions
+# MAGIC exists. That is the real production behavior: the initial 30-day scan is a lookback
+# MAGIC boundary, not an invented baseline.
 
 # COMMAND ----------
 
 model_id_column = monitor_config.inference_log.model_id_column
+
+# profile_metrics has one row per (time window, model version, column). The special
+# column_name ":table" is the whole-table summary rather than a single column, and log_type
+# "INPUT" is the scored data (vs the monitor's own baseline). So this shows the per-day,
+# per-version row counts and prediction summary.
 display(
     spark.table(profile_table)
     .where((F.col("column_name") == ":table") & (F.col("log_type") == "INPUT"))
     .orderBy(F.col("window.start"), model_id_column)
 )
 
+# drift_metrics with drift_type "CONSECUTIVE" is each daily window compared to the one before
+# it. The table only exists once there are at least two daily windows to compare.
 if drift_table and spark.catalog.tableExists(drift_table):
     display(
         spark.table(drift_table)

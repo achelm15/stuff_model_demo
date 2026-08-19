@@ -7,9 +7,11 @@
 # MAGIC %md
 # MAGIC # 04 · Batch Inference
 # MAGIC
-# MAGIC Score with the registered model and write one production prediction-events table.
-# MAGIC The table is both the durable inference log and the direct input to Data Quality
-# MAGIC Monitoring. A zero-copy SQL view exposes only the latest prediction for each pitch.
+# MAGIC Score a season of pitches with the registered model and save the predictions to one
+# MAGIC table in Unity Catalog. That table is an append-only history of every prediction the
+# MAGIC model has made: it is both the audit log and the input that monitoring (notebook 05)
+# MAGIC reads. On top of it we create a SQL view (a saved query that stores no data of its own)
+# MAGIC that returns just the latest prediction for each pitch.
 
 # COMMAND ----------
 
@@ -64,12 +66,12 @@ IDENTITY_COLUMNS = [
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Score the registered artifact
+# MAGIC ## Score the registered model
 # MAGIC
-# MAGIC The registered model is loaded once and applied through a pandas UDF, so feature rows
-# MAGIC remain distributed and are never collected to the driver. In routine production inference, the source would be
-# MAGIC restricted to the new batch; a promotion workflow can deliberately select the full scoring
-# MAGIC population.
+# MAGIC We load the `@champion` model from Unity Catalog and apply it with a *pandas UDF*: a
+# MAGIC Python function that Spark runs in parallel across the cluster, so each pitch is scored
+# MAGIC where its data already lives and nothing is pulled onto the driver. Here we score a full
+# MAGIC season; a scheduled production job would score only the new batch of pitches.
 
 # COMMAND ----------
 
@@ -123,6 +125,12 @@ def predict_udf(*feature_cols):
     frame.columns = MODEL_INPUTS
     return pd.Series(model.predict(frame), index=frame.index)
 
+# Build the exact row we store for each scored pitch:
+#   - predicted_run_value: the model's output.
+#   - actual_run_value: the observed outcome, kept so notebook 05 can measure quality later.
+#   - model_name/version/alias, batch_id, scored_at: provenance, so every prediction says
+#     which model produced it, in which run, and when.
+#   - inference_id: a deterministic fingerprint used to avoid duplicate rows on write (below).
 scored = (
     source.select(*IDENTITY_COLUMNS, *MODEL_INPUTS, "pitch_rv")
     .withColumn(
@@ -137,6 +145,10 @@ scored = (
     .withColumn("batch_id", F.lit(BATCH_ID))
     .withColumn("scored_at", F.current_timestamp())
     .withColumn(
+        # sha2 hashes (pitch keys + model version + batch id) into one id. The same pitch
+        # scored by the same model version in the same batch always gets the same id, so a
+        # re-run inserts nothing new. A new model version or batch changes the id, so a
+        # genuinely new prediction is still recorded.
         "inference_id",
         F.sha2(
             F.concat_ws(
@@ -152,20 +164,33 @@ scored = (
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Publish one idempotent inference log
+# MAGIC ## Write the predictions to the events table
 # MAGIC
-# MAGIC `inference_id` makes a repaired job run a no-op while preserving a genuinely new
-# MAGIC scoring event. Predictions are immutable events; notebook 05 monitors this table
-# MAGIC directly, so there is no second monitoring copy.
+# MAGIC Each scored pitch becomes one row in `gold_pitch_prediction_events`, an append-only
+# MAGIC Delta table (a versioned table in Unity Catalog). We only ever add rows, never update
+# MAGIC or delete, so the table keeps the full history of every prediction the model has made.
+# MAGIC
+# MAGIC Two Databricks features make this safe to run more than once:
+# MAGIC
+# MAGIC - **`MERGE ... WHEN NOT MATCHED`** inserts a scored row only if its `inference_id` is
+# MAGIC   not already in the table, so re-running the batch (or an automatic job retry) never
+# MAGIC   creates duplicate rows.
+# MAGIC - **Change Data Feed** makes Delta record each row-level insert, so notebook 05 can
+# MAGIC   process only the new rows on each refresh instead of re-reading the whole table.
 
 # COMMAND ----------
 
+# First run: the table does not exist yet, so create it by writing the scored rows.
+# Later runs: the table exists, so MERGE in only the rows whose inference_id is new.
 if spark.catalog.tableExists(PREDICTION_EVENTS_TABLE):
+    # Turn on Change Data Feed so notebook 05's monitor reads only new rows on each refresh.
     spark.sql(
         f"ALTER TABLE {PREDICTION_EVENTS_TABLE} "
         "SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
     )
+    # MERGE reads its new rows from SQL, so expose the scored DataFrame as a temporary view.
     scored.createOrReplaceTempView("scored_batch")
+    # Insert a scored pitch only when its inference_id is not already present (no duplicates).
     spark.sql(
         f"""
         MERGE INTO {PREDICTION_EVENTS_TABLE} AS target
@@ -176,12 +201,16 @@ if spark.catalog.tableExists(PREDICTION_EVENTS_TABLE):
     )
     spark.catalog.dropTempView("scored_batch")
 else:
+    # Create the table from the first batch, then enable Change Data Feed for future refreshes.
     scored.write.format("delta").mode("append").saveAsTable(PREDICTION_EVENTS_TABLE)
     spark.sql(
         f"ALTER TABLE {PREDICTION_EVENTS_TABLE} "
         "SET TBLPROPERTIES (delta.enableChangeDataFeed = true)"
     )
 
+# The log can hold several predictions for the same pitch (for example after a newer model
+# version re-scores it). This view is a saved query that stores no data; it returns just the
+# most recent prediction per pitch (highest scored_at), which is what dashboards should read.
 spark.sql(
     f"""
     CREATE OR REPLACE VIEW {CURRENT_PREDICTIONS_VIEW} AS
@@ -196,10 +225,11 @@ spark.sql(
 
 # COMMAND ----------
 # MAGIC %md
-# MAGIC ## Use the current-state view
+# MAGIC ## Read the latest prediction per pitch
 # MAGIC
-# MAGIC Consumers see one row per pitch without duplicating the data. The event table retains
-# MAGIC the evidence monitoring and audit workflows need when a new model version takes over.
+# MAGIC Querying the view gives one row per pitch with no data copied. As a quick sanity check
+# MAGIC we build a leaderboard of the pitchers whose fastballs have the lowest predicted run
+# MAGIC value (the best "stuff"), among those with enough fastballs to be meaningful.
 
 # COMMAND ----------
 
