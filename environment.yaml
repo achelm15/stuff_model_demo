@@ -1,0 +1,31 @@
+# Centralized serverless environment for this demo, kept as one source of truth.
+#
+# The notebooks in this repo pin their libraries inline in their own `# /// script`
+# headers, so they run with nothing to configure. This file is the alternative you would
+# reach for on a real team: one environment spec that many notebooks share, so a version
+# bump happens in one place instead of in every header.
+#
+# The clean way to use it is a Workspace Base Environment: register this YAML once in the
+# workspace (Settings -> Compute -> Base environments, or the API), then point each notebook
+# header at it by name, e.g.
+#
+#   # /// script
+#   # [tool.databricks.environment]
+#   # base_environment = "rockies-stuff-demo"
+#   # ///
+#
+# Referencing it by name resolves workspace-wide, so it does not depend on the notebook
+# living next to this file. Avoid `base_environment = "environment.yaml"` (a relative path):
+# it only resolves from a Git folder and otherwise forces you to set the environment by hand.
+
+environment_version: "5"
+# Serverless v5 already ships numpy, pandas, scipy, scikit-learn, and mlflow, so they are
+# intentionally not pinned here (pinning them would override the base).
+dependencies:
+  - xgboost==3.1.1
+  - lightgbm==4.6.0
+  - optuna==3.6.1
+  - shap==0.49.1
+  # Notebook 05 uses the Data Quality monitoring API (databricks.sdk.service.dataquality),
+  # which is missing from the v5 base sdk (0.67.0); it was added in 0.68.0.
+  - databricks-sdk>=0.68.0

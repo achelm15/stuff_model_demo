@@ -23,6 +23,7 @@ model predicts it from release speed, spin, movement, and release geometry.
 | `07_genie_code_stuff_model.py` | A near-empty notebook: one markdown cell with the prompt, which Genie Code fills in to scaffold the same model using the personal skill. |
 | `_monitoring_helpers.py` | Helpers `%run` by notebook 05. |
 | `rockies-mlflow-conventions/` | The personal Assistant skill notebook `07` `@`-mentions: the house MLflow + Unity Catalog conventions for training the stuff model. Copy it into `/Workspace/Users/<you>/.assistant/skills/`. |
+| `environment.yaml` | A reference, not wired into the notebooks: the centralized version of the serverless dependencies, for the shared-environment approach described below. |
 
 ## Prerequisites
 
@@ -62,6 +63,36 @@ markdown cell you follow, letting Genie Code scaffold the same `02`/`03` work fr
 Per-notebook widgets (besides `catalog`/`schema`) let you set season, tuning trials,
 training device (`gpu`/`cpu`), model alias, endpoint name, and the warehouse id.
 
+## Serverless environment
+
+There are two ways to give a serverless notebook its libraries, and this repo shows both.
+
+- **Inline (what the notebooks use).** Each notebook pins its libraries in its own
+  `# /// script` header, so the environment travels with the notebook and applies on its
+  own, with nothing to set up. This is the friendliest path for a workshop: open a notebook
+  and run it. The cost is duplication, so a version bump means editing every header that
+  carries it (01, 02, 03, 04, 05, 07).
+
+- **Centralized (`environment.yaml`).** On a real team you usually want one environment spec
+  that many notebooks share, so a version bump happens in one place. The clean way to do that
+  is a Workspace Base Environment: register `environment.yaml` once in the workspace (Settings
+  -> Compute -> Base environments, or the API), then reference it by name from each header:
+
+  ```
+  # /// script
+  # [tool.databricks.environment]
+  # base_environment = "rockies-stuff-demo"
+  # ///
+  ```
+
+  Referencing it by name resolves workspace-wide, so it does not depend on the notebook
+  sitting next to the file. Do not use `base_environment = "environment.yaml"` (a relative
+  path): it only resolves from a Git folder and otherwise makes you set the environment by
+  hand, notebook by notebook.
+
+`environment.yaml` is included here as the reference for the centralized approach; the
+notebooks themselves stay inline so the workshop runs with zero environment setup.
+
 ## Training data
 
 The full training set is a Release asset, not part of the git tree, so cloning the
@@ -88,8 +119,8 @@ before you set the `train_season` / `inference_season` widgets in later notebook
 
 - `catalog` and `schema` are blank by default and every notebook stops until you set
   them. This is deliberate so you never run against the wrong target by accident.
-- Each notebook pins its serverless libraries inline in the `# /// script` header, so
-  the environment travels with the notebook and applies on its own. There is no shared
-  environment file to point at and nothing to select per notebook. If you bump a version,
-  update the header in each notebook that carries it (01, 02, 03, 04, 05, 07).
+- Each notebook pins its serverless libraries inline in its `# /// script` header, so
+  there is nothing to set up per notebook. If you bump a version, edit each header that
+  carries it (01, 02, 03, 04, 05, 07). See "Serverless environment" above for the
+  centralized alternative.
 - Keep the CSV in a UC Volume. Git folders are not the place for an 800 MB file.
