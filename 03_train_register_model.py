@@ -242,12 +242,20 @@ with mlflow.start_run(run_name=f"canonical-{ENVIRONMENT}-xgboost") as parent_run
 
 VERSION = str(model_info.registered_model_version)
 registry = MlflowClient(registry_uri="databricks-uc")
-registry.set_model_version_tag(MODEL_NAME, VERSION, "environment", ENVIRONMENT)
-registry.set_model_version_tag(MODEL_NAME, VERSION, "evaluation_season", str(TRAIN_SEASON))
+
+# Promote this version by moving the alias first. This is the alias that 04 (batch scoring),
+# 06 (serving), and the app all resolve, so set it before the cosmetic tags below: that way a
+# tag write failing can never leave the model registered but unpromoted.
 if MODEL_ALIAS:
     registry.set_registered_model_alias(MODEL_NAME, MODEL_ALIAS, VERSION)
 
-print(f"registered {MODEL_NAME} version {VERSION}")
+registry.set_model_version_tag(MODEL_NAME, VERSION, "environment", ENVIRONMENT)
+registry.set_model_version_tag(MODEL_NAME, VERSION, "evaluation_season", str(TRAIN_SEASON))
+
+if MODEL_ALIAS:
+    print(f"registered {MODEL_NAME} version {VERSION} and set @{MODEL_ALIAS} -> version {VERSION}")
+else:
+    print(f"registered {MODEL_NAME} version {VERSION} (no alias set; the model_alias widget is blank)")
 dbutils.notebook.exit(
     json.dumps(
         {
