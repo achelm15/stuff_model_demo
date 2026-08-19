@@ -72,6 +72,9 @@ source = (
     spark.table(SILVER_TABLE)
     .where((F.col("season") == INFERENCE_SEASON) & F.col("pitch_type").isin("FF", "SI"))
 )
+# Fewer, larger partitions mean the model is shipped to and deserialized on fewer workers.
+# coalesce reduces the partition count without a full shuffle (unlike repartition).
+source = source.coalesce(4)
 missing_inputs = sorted(set(MODEL_INPUTS) - set(source.columns))
 assert not missing_inputs, f"Source data is missing model inputs: {missing_inputs}"
 
@@ -82,28 +85,17 @@ import pandas as pd
 import mlflow.sklearn
 from pyspark.sql.functions import pandas_udf
 
-# mlflow.pyfunc.spark_udf parses the Databricks runtime version, which raises
-# InvalidVersion on preview runtimes with non-numeric minors (e.g. "18.x-photon-scala2").
-# Apply the model through a pandas UDF so scoring stays distributed. The closure captures
-# only MODEL_URI (a string) and lazy-loads the model once per worker into a module-level
-# cache. We avoid sparkContext.broadcast (SparkContext is not accessible on serverless) and
-# avoid embedding the pickled model in the closure, which would ship the whole artifact with
-# every task.
-_MODEL_CACHE = {}
+# Load the model once on the driver. Referencing it in the UDF makes Spark serialize the
+# model into the closure and ship it to the workers a single time, instead of every worker
+# fetching and rebuilding it from Unity Catalog. We can't use sparkContext.broadcast
+# (SparkContext is not accessible on serverless), and mlflow.pyfunc.spark_udf can't be used
+# either: it parses the runtime version, which raises InvalidVersion on preview runtimes with
+# non-numeric minors (e.g. "18.x-photon-scala2").
+model = mlflow.sklearn.load_model(MODEL_URI)
 
 
 @pandas_udf("double")
 def predict_udf(*feature_cols):
-    import warnings
-
-    # A booster pickled by an older xgboost patch warns harmlessly when a newer xgboost
-    # unpickles it; predictions are unaffected, and retraining on the current env clears it
-    # at the source. Filter on the worker, where the load actually happens.
-    warnings.filterwarnings("ignore", message=".*serialized model.*", category=UserWarning)
-    model = _MODEL_CACHE.get(MODEL_URI)
-    if model is None:
-        model = mlflow.sklearn.load_model(MODEL_URI)
-        _MODEL_CACHE[MODEL_URI] = model
     frame = pd.concat(feature_cols, axis=1)
     frame.columns = MODEL_INPUTS
     return pd.Series(model.predict(frame), index=frame.index)
@@ -169,6 +161,11 @@ leaderboard = (
 )
 
 display(leaderboard.orderBy("stuff_rv").limit(20))
+
+# COMMAND ----------
+
+# dbutils.notebook.exit stops the notebook the moment it runs, so keep it in its own cell;
+# in the same cell as display() above it would cut off the leaderboard output.
 dbutils.notebook.exit(
     json.dumps(
         {
