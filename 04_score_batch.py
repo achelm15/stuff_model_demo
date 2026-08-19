@@ -72,9 +72,6 @@ source = (
     spark.table(SILVER_TABLE)
     .where((F.col("season") == INFERENCE_SEASON) & F.col("pitch_type").isin("FF", "SI"))
 )
-# Fewer, larger partitions mean the model is shipped to and deserialized on fewer workers.
-# coalesce reduces the partition count without a full shuffle (unlike repartition).
-source = source.coalesce(4)
 missing_inputs = sorted(set(MODEL_INPUTS) - set(source.columns))
 assert not missing_inputs, f"Source data is missing model inputs: {missing_inputs}"
 
