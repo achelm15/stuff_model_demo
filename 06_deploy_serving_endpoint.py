@@ -22,66 +22,73 @@ MODEL_NAME = f"{CATALOG}.{SCHEMA}.fastball_stuff_rv"
 # COMMAND ----------
 
 import json
-import time
+from datetime import timedelta
 
 import mlflow
 from databricks.sdk import WorkspaceClient
-from mlflow.deployments import get_deploy_client
+from databricks.sdk.errors import ResourceDoesNotExist
+from databricks.sdk.service.serving import (
+    EndpointCoreConfigInput,
+    Route,
+    ServedEntityInput,
+    TrafficConfig,
+)
 from mlflow.tracking import MlflowClient
 
+# Resolve the alias to a concrete version now. The endpoint pins that immutable version, so
+# moving @champion later does not silently repoint a running endpoint; you re-run this notebook.
 mlflow.set_registry_uri("databricks-uc")
 registry = MlflowClient(registry_uri="databricks-uc")
 selected = registry.get_model_version_by_alias(MODEL_NAME, MODEL_ALIAS)
 VERSION = str(selected.version)
 
-served_entity = {
-    "entity_name": MODEL_NAME,
-    "entity_version": VERSION,
-    "workload_size": "Small",
-    "scale_to_zero_enabled": True,
-}
-config = {
-    "served_entities": [served_entity],
-    "traffic_config": {
-        "routes": [{
-            "served_model_name": f"fastball_stuff_rv-{VERSION}",
-            "traffic_percentage": 100,
-        }]
-    },
-}
+# One served entity, all traffic to it. SERVED_NAME is a stable label we choose and reference
+# from the traffic route, so the route does not depend on the version string.
+SERVED_NAME = "fastball-stuff-rv"
+served_entity = ServedEntityInput(
+    name=SERVED_NAME,
+    entity_name=MODEL_NAME,
+    entity_version=VERSION,
+    workload_size="Small",
+    scale_to_zero_enabled=True,  # workshop cost control: idle endpoints cost nothing
+)
+traffic_config = TrafficConfig(
+    routes=[Route(served_entity_name=SERVED_NAME, traffic_percentage=100)]
+)
 
-deploy = get_deploy_client("databricks")
+# Create the endpoint if it is new, otherwise update its config. The *_and_wait calls block
+# until the endpoint finishes provisioning and reaches a ready, not-updating state, and raise
+# on timeout or a failed rollout, so there is no hand-rolled polling loop to maintain.
 w = WorkspaceClient()
-
 try:
-    deploy.create_endpoint(name=ENDPOINT_NAME, config=config)
-    action = "created"
-except Exception as create_error:
-    print("Create failed or endpoint already exists; attempting update:", str(create_error)[:500])
-    deploy.update_endpoint(endpoint=ENDPOINT_NAME, config=config)
+    w.serving_endpoints.get(ENDPOINT_NAME)
+    exists = True
+except ResourceDoesNotExist:
+    exists = False
+
+if exists:
+    endpoint = w.serving_endpoints.update_config_and_wait(
+        name=ENDPOINT_NAME,
+        served_entities=[served_entity],
+        traffic_config=traffic_config,
+        timeout=timedelta(minutes=30),
+    )
     action = "updated"
+else:
+    endpoint = w.serving_endpoints.create_and_wait(
+        name=ENDPOINT_NAME,
+        config=EndpointCoreConfigInput(
+            served_entities=[served_entity],
+            traffic_config=traffic_config,
+        ),
+        timeout=timedelta(minutes=30),
+    )
+    action = "created"
 
-deadline = time.time() + 30 * 60
-last_state = None
-while time.time() < deadline:
-    endpoint = w.serving_endpoints.get(ENDPOINT_NAME)
-    ready = getattr(endpoint.state, "ready", None)
-    config_update = getattr(endpoint.state, "config_update", None)
-    ready_value = str(getattr(ready, "value", ready)).split(".")[-1]
-    config_update_value = str(getattr(config_update, "value", config_update)).split(".")[-1]
-    last_state = {"ready": ready_value, "config_update": config_update_value}
-    print(time.strftime("%H:%M:%S"), last_state)
-    if ready_value == "READY" and config_update_value == "NOT_UPDATING":
-        break
-    time.sleep(30)
-
-assert last_state is not None and last_state["ready"] == "READY", (
-    f"Endpoint did not become ready before the timeout: {last_state}"
-)
-assert last_state["config_update"] == "NOT_UPDATING", (
-    f"Endpoint configuration is still updating: {last_state}"
-)
-
+last_state = {
+    "ready": str(endpoint.state.ready),
+    "config_update": str(endpoint.state.config_update),
+}
 print(
     f"{action} endpoint {ENDPOINT_NAME} serving {MODEL_NAME} "
     f"version {VERSION} resolved from @{MODEL_ALIAS}"
