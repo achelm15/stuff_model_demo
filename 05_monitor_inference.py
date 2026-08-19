@@ -9,7 +9,7 @@
 # MAGIC
 # MAGIC Databricks can watch a table of predictions and compute quality and drift metrics over
 # MAGIC time on its own. This notebook points that managed monitoring (a "Data Quality"
-# MAGIC profile) at the prediction-events table from notebook 04. You write no metric code and
+# MAGIC profile) at the predictions table from notebook 04. You write no metric code and
 # MAGIC copy no data: Databricks profiles the predictions and the inputs, compares each day's
 # MAGIC window against the day before, and writes the results to two metrics tables plus a
 # MAGIC generated dashboard.
