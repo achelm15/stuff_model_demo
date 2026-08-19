@@ -22,14 +22,13 @@ model predicts it from release speed, spin, movement, and release geometry.
 | `06_deploy_serving_endpoint.py` | Create or update a Model Serving endpoint for the champion model. |
 | `07_genie_code_stuff_model.py` | A near-empty notebook: one markdown cell with the prompt, which Genie Code fills in to scaffold the same model using the personal skill. |
 | `_monitoring_helpers.py` | Helpers `%run` by notebook 05. |
-| `environment.yaml` | Pinned dependencies (mlflow, xgboost, optuna, scikit-learn, shap, lightgbm) used by the serverless environment header. |
 | `rockies-mlflow-conventions/` | The personal Assistant skill notebook `07` `@`-mentions: the house MLflow + Unity Catalog conventions for training the stuff model. Copy it into `/Workspace/Users/<you>/.assistant/skills/`. |
 
 ## Prerequisites
 
-- A Databricks workspace with Unity Catalog and serverless notebooks (the notebooks
-  pin their libraries through `environment.yaml`). Databricks Runtime ML also works
-  if you match the versions.
+- A Databricks workspace with Unity Catalog and serverless notebooks (each notebook
+  pins its libraries inline in the environment header, so nothing to configure).
+  Databricks Runtime ML also works if you match the versions.
 - Rights to create a schema, a volume, tables, an MLflow experiment, and a registered
   model in the catalog/schema you point at.
 - A SQL warehouse id for notebook 05 (monitoring).
@@ -39,8 +38,9 @@ model predicts it from release speed, spin, movement, and release geometry.
 Steps:
 
 1. Clone this repo into Databricks as a Git folder (Workspace -> Git folder -> add
-   this repo URL). Cloning as a Git folder is what makes the relative
-   `base_environment = "environment.yaml"` resolve.
+   this repo URL). Cloning as a Git folder is what makes the relative `%run ./_config`
+   resolve. Each notebook embeds its serverless libraries in its own header, so there
+   is no environment to set up per notebook.
 2. Open `_config` (or any notebook) and set the `catalog` and `schema` widgets. They
    are intentionally blank and the notebooks error until you set them. You set them on
    whichever notebook you are running, or pass them as job parameters.
@@ -88,7 +88,8 @@ before you set the `train_season` / `inference_season` widgets in later notebook
 
 - `catalog` and `schema` are blank by default and every notebook stops until you set
   them. This is deliberate so you never run against the wrong target by accident.
-- `base_environment` is a relative path. It resolves when you run from a Git folder. If
-  you import the notebooks into a plain workspace folder instead, point it at wherever
-  you place `environment.yaml`.
+- Each notebook pins its serverless libraries inline in the `# /// script` header, so
+  the environment travels with the notebook and applies on its own. There is no shared
+  environment file to point at and nothing to select per notebook. If you bump a version,
+  update the header in each notebook that carries it (02, 03, 04, 05, 07).
 - Keep the CSV in a UC Volume. Git folders are not the place for an 800 MB file.

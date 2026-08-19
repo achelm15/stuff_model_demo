@@ -1,8 +1,14 @@
 # Databricks notebook source
 # /// script
 # [tool.databricks.environment]
-# base_environment = "environment.yaml"
 # environment_version = "5"
+# dependencies = [
+#   "xgboost==3.1.1",
+#   "lightgbm==4.6.0",
+#   "optuna==3.6.1",
+#   "shap==0.49.1",
+#   "databricks-sdk>=0.68.0",  # 05 needs the dataquality API (missing in the v5 base sdk 0.67.0)
+# ]
 # ///
 # MAGIC %md
 # MAGIC # 07 · Bootstrapping the Stuff Model with Genie Code
