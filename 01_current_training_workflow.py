@@ -1,4 +1,12 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# dependencies = [
+#   "xgboost==3.1.1",
+#   "lightgbm==4.6.0",
+# ]
+# ///
 # MAGIC %md
 # MAGIC # 01 · The Current Workflow: Models Without a System of Record
 # MAGIC

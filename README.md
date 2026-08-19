@@ -91,5 +91,5 @@ before you set the `train_season` / `inference_season` widgets in later notebook
 - Each notebook pins its serverless libraries inline in the `# /// script` header, so
   the environment travels with the notebook and applies on its own. There is no shared
   environment file to point at and nothing to select per notebook. If you bump a version,
-  update the header in each notebook that carries it (02, 03, 04, 05, 07).
+  update the header in each notebook that carries it (01, 02, 03, 04, 05, 07).
 - Keep the CSV in a UC Volume. Git folders are not the place for an 800 MB file.
