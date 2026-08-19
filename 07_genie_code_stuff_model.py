@@ -22,6 +22,12 @@
 # MAGIC later promote it to the shared `/Workspace/.assistant/skills/` path to give the whole team the
 # MAGIC same conventions.
 # MAGIC
+# MAGIC ## Install the skill (run the cell below first)
+# MAGIC
+# MAGIC The next cell copies this repo's `rockies-mlflow-conventions/SKILL.md` into your personal
+# MAGIC Assistant skills folder so Genie Code can find it. Run it once. If the skill is already there
+# MAGIC (for example a teammate installed the workspace-wide copy), you can skip it.
+# MAGIC
 # MAGIC ## Try it
 # MAGIC
 # MAGIC Set the `catalog` and `schema` widgets (or run `_config` first), then open Genie Code and
@@ -57,5 +63,37 @@
 # MAGIC
 # MAGIC Review the generated recipe, and move anything worth keeping into notebook 03 for governed
 # MAGIC promotion. Genie Code gets you a correct draft fast; promotion stays a deliberate, governed step.
+
+# COMMAND ----------
+
+# Install this repo's copy of the skill into your personal Assistant skills folder. You can write
+# under your own /Workspace/Users/<you> path yourself; the workspace-wide /Workspace/.assistant
+# path needs admin rights.
+import os
+
+from databricks.sdk import WorkspaceClient
+from databricks.sdk.service.workspace import ImportFormat
+
+w = WorkspaceClient()
+user_name = w.current_user.me().user_name
+
+# This notebook and the skill folder are siblings in the Git folder. Resolve the notebook's own
+# directory from its workspace path so the read works regardless of the current working directory.
+notebook_path = (
+    dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+)
+repo_dir = os.path.dirname(f"/Workspace{notebook_path}")
+skill_source = f"{repo_dir}/rockies-mlflow-conventions/SKILL.md"
+
+skill_dir = f"/Workspace/Users/{user_name}/.assistant/skills/rockies-mlflow-conventions"
+with open(skill_source, "rb") as handle:
+    skill_bytes = handle.read()
+
+w.workspace.mkdirs(skill_dir)
+w.workspace.upload(
+    f"{skill_dir}/SKILL.md", skill_bytes, format=ImportFormat.RAW, overwrite=True
+)
+print(f"Installed the skill at {skill_dir}/SKILL.md")
+print("Reference it in Genie Code as @rockies-mlflow-conventions.")
 
 # COMMAND ----------
