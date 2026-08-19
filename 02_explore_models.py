@@ -53,7 +53,7 @@ from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_err
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from xgboost import XGBRegressor
+from xgboost import DMatrix, XGBRegressor
 
 mlflow.set_experiment(EXPERIMENT_NAME)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -356,7 +356,16 @@ def log_shap_plots(fitted_pipeline, raw_features, max_rows=2_000):
         columns=preprocessor.get_feature_names_out(),
         index=sample.index,
     )
-    shap_values = shap.TreeExplainer(estimator).shap_values(transformed)
+    # shap 0.49's XGBoost parser calls float(base_score), but xgboost 3.x serializes
+    # base_score as an array (e.g. "[1.8E-3]"), so shap.TreeExplainer raises
+    # "could not convert string to float". Compute the same SHAP values with xgboost's own
+    # pred_contribs, which skips shap's parser. The last returned column is the bias term.
+    booster = estimator.get_booster()
+    contributions = booster.predict(
+        DMatrix(transformed, feature_names=list(transformed.columns)),
+        pred_contribs=True,
+    )
+    shap_values = contributions[:, :-1]
 
     plt.figure(figsize=(8, 6))
     shap.summary_plot(
